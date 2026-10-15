@@ -62,6 +62,8 @@ main{flex:1;overflow-y:auto;display:flex;flex-direction:column;padding-block:12p
 .kick{border:0;background:none;color:var(--muted);font:inherit;font-size:11px;cursor:pointer;padding:2px 0;text-decoration:underline}
 .onlinebtn{border:0;background:none;font:inherit;color:inherit;cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px}
 .admin{font-size:11px;font-weight:600;color:var(--mine-ink);background:var(--accent);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.adminbtn{border:0;cursor:pointer;font:inherit;font-size:11px;font-weight:600}
+#clearBtn.confirm{border-color:var(--warn);color:var(--warn);font-weight:600}
 .people{position:absolute;z-index:15;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:10px;width:min(280px,calc(100vw - 32px));display:flex;flex-direction:column;gap:4px}
 .people h3{margin:0 0 4px;font-size:13px;color:var(--muted);font-weight:600}
 .person{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:8px}
@@ -111,7 +113,7 @@ textarea{flex:1;min-width:0;resize:none;border:1px solid var(--line);border-radi
   <header class="pad">
     <h1>톡톡방</h1>
     <span class="online"><button class="onlinebtn" id="onlineBtn" type="button" aria-label="접속자 보기"><span class="dot" id="dot"></span><span id="online">연결 중…</span></button></span>
-    <span class="admin" id="adminBadge" hidden>방장</span>
+    <button class="admin adminbtn" id="adminBadge" type="button" hidden aria-label="방장 메뉴">방장 ▾</button>
     <span class="spacer"></span>
     <button class="chip" id="inviteBtn" type="button">초대 링크</button>
     <button class="chip" id="nickBtn" type="button">이름</button>
@@ -229,6 +231,11 @@ create policy &quot;chat media read&quot; on storage.objects for select to anon,
 </div>
 <div class="overlay" id="viewer" hidden><img id="viewerImg" alt=""></div>
 <div class="people" id="people" hidden></div>
+<div class="people" id="adminMenu" hidden>
+  <h3>방장 메뉴</h3>
+  <button class="ghostbtn" id="clearBtn" type="button">이 방 대화 모두 지우기</button>
+  <p class="small" id="clearHint" hidden>한 번 더 누르면 모든 사람 화면에서 대화가 전부 지워져요.</p>
+</div>
 <div class="overlay" id="kicked" hidden>
   <div class="card"><h2>톡톡방</h2><p>방장이 이 대화방에서 내보냈어요. 다시 들어오려면 방장에게 말해 주세요.</p></div>
 </div>
@@ -425,6 +432,38 @@ const BUCKET = "chat-media";
     $("kicked").hidden = false; msg.disabled = true; send.disabled = true; $("attach").disabled = true;
     try { channel?.untrack(); sb?.removeChannel(channel); } catch {}
   }
+
+  // ----- 방장 메뉴: 대화 모두 지우기 -----
+  let clearArmed = false;
+  function clearList(){
+    list.querySelectorAll(".row,.day").forEach(n => n.remove()); last = null;
+    const s2 = document.createElement("div"); s2.className = "sys"; s2.textContent = "방장이 대화를 모두 지웠어요."; list.appendChild(s2);
+  }
+  function placeMenu(box, anchor){
+    const r = anchor.getBoundingClientRect();
+    box.style.top = (r.bottom + window.scrollY + 6) + "px";
+    box.style.left = Math.max(16, Math.min(r.left, window.innerWidth - box.offsetWidth - 16)) + "px";
+  }
+  $("adminBadge").onclick = (e) => {
+    e.stopPropagation(); const box = $("adminMenu");
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false; placeMenu(box, $("adminBadge"));
+  };
+  $("clearBtn").onclick = async (e) => {
+    e.stopPropagation(); const b = $("clearBtn");
+    if (!clearArmed) {
+      clearArmed = true; b.classList.add("confirm"); b.textContent = "정말 모두 지우기"; $("clearHint").hidden = false;
+      setTimeout(() => { if (clearArmed) { clearArmed = false; b.classList.remove("confirm"); b.textContent = "이 방 대화 모두 지우기"; $("clearHint").hidden = true; } }, 4000);
+      return;
+    }
+    clearArmed = false; b.disabled = true;
+    const { data, error } = await sb.rpc("admin_clear_room", { p_key: adminKey, p_room: room });
+    b.disabled = false; b.classList.remove("confirm"); b.textContent = "이 방 대화 모두 지우기"; $("clearHint").hidden = true;
+    if (error || typeof data !== "number" || data < 0) { showNotice("대화를 지우지 못했어요. 잠시 후 다시 해 주세요."); return; }
+    channel?.send({ type:"broadcast", event:"cleared", payload:{} });
+    clearList(); $("adminMenu").hidden = true; toast(`대화 ${data}개를 지웠어요`);
+  };
+  document.addEventListener("click", e => { const box = $("adminMenu"); if (!box.hidden && !box.contains(e.target)) box.hidden = true; });
 
   // ----- 접속자 목록 -----
   function peopleNow(){
@@ -628,6 +667,7 @@ const BUCKET = "chat-media";
         if (!payload || payload.cid === clientId) return;
         typers.set(String(payload.cid), { nick: String(payload.nick||"누군가").slice(0,20), t: Date.now() }); renderTyping();
       })
+      .on("broadcast", { event:"cleared" }, () => clearList())
       .on("broadcast", { event:"kick" }, ({ payload }) => {
         if (payload && payload.cid === clientId) showKicked(); else renderPeople();
       })
