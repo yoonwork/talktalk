@@ -58,7 +58,16 @@ main{flex:1;overflow-y:auto;display:flex;flex-direction:column;padding-block:12p
 .meta{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
 .mine .meta{align-items:flex-start}
 .del{border:0;background:none;color:var(--muted);font:inherit;font-size:11px;cursor:pointer;padding:2px 0;text-decoration:underline}
-.del.confirm{color:var(--warn);font-weight:600}
+.del.confirm,.kick.confirm{color:var(--warn);font-weight:600}
+.kick{border:0;background:none;color:var(--muted);font:inherit;font-size:11px;cursor:pointer;padding:2px 0;text-decoration:underline}
+.onlinebtn{border:0;background:none;font:inherit;color:inherit;cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px}
+.admin{font-size:11px;font-weight:600;color:var(--mine-ink);background:var(--accent);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.people{position:absolute;z-index:15;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:10px;width:min(280px,calc(100vw - 32px));display:flex;flex-direction:column;gap:4px}
+.people h3{margin:0 0 4px;font-size:13px;color:var(--muted);font-weight:600}
+.person{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:8px}
+.person .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.person .me{font-size:11px;color:var(--muted)}
+.person .av{width:26px;height:26px;font-size:12px}
 .gone{font-size:13px;color:var(--muted);font-style:italic;border:1px dashed var(--line);border-radius:14px;padding:6px 12px}
 .sys{align-self:center;font-size:12px;color:var(--muted);margin:10px 0;text-align:center}
 .typing{min-height:20px;font-size:12px;color:var(--muted)}
@@ -101,7 +110,8 @@ textarea{flex:1;min-width:0;resize:none;border:1px solid var(--line);border-radi
   <div class="demo" id="demoBar" hidden>미리보기 모드예요. 보낸 메시지는 이 화면에만 보이고 저장되지 않아요.</div>
   <header class="pad">
     <h1>톡톡방</h1>
-    <span class="online"><span class="dot" id="dot"></span><span id="online">연결 중…</span></span>
+    <span class="online"><button class="onlinebtn" id="onlineBtn" type="button" aria-label="접속자 보기"><span class="dot" id="dot"></span><span id="online">연결 중…</span></button></span>
+    <span class="admin" id="adminBadge" hidden>방장</span>
     <span class="spacer"></span>
     <button class="chip" id="inviteBtn" type="button">초대 링크</button>
     <button class="chip" id="nickBtn" type="button">이름</button>
@@ -212,6 +222,10 @@ create policy &quot;chat media read&quot; on storage.objects for select to anon,
   </form>
 </div>
 <div class="overlay" id="viewer" hidden><img id="viewerImg" alt=""></div>
+<div class="people" id="people" hidden></div>
+<div class="overlay" id="kicked" hidden>
+  <div class="card"><h2>톡톡방</h2><p>방장이 이 대화방에서 내보냈어요. 다시 들어오려면 방장에게 말해 주세요.</p></div>
+</div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -239,7 +253,12 @@ const BUCKET = "chat-media";
   let ownerHash = null;
   const hashReady = (crypto.subtle ? crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret)) : Promise.reject())
     .then(buf => { ownerHash = [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join(""); }).catch(()=>{});
-  let pendingDel = null;
+  let pendingDel = null, pendingKick = null, isAdmin = false, kicked = false;
+  // 방장 열쇠: ?admin=열쇠 로 한 번 열면 이 기기에 저장돼요
+  let adminKey = null;
+  { const p = new URLSearchParams(location.search); const a = p.get("admin");
+    if (a) { store.set("tt_admin", a); p.delete("admin"); history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : "")); }
+    adminKey = store.get("tt_admin"); }
   let sb = null, channel = null, last = null, demo = false, cfg = null;
   const shown = new Set();
 
@@ -334,10 +353,15 @@ const BUCKET = "chat-media";
     content.className = "content";
     const meta=document.createElement("div"); meta.className="meta";
     const t=document.createElement("span"); t.className="time"; t.textContent=fmtTime(ts); meta.appendChild(t);
-    if (mine && m.owner_hash) {
+    if ((mine && m.owner_hash) || isAdmin) {
       const del=document.createElement("button"); del.type="button"; del.className="del"; del.textContent="삭제";
-      del.onclick = () => askDelete(m.id, del);
+      del.onclick = () => askDelete(m.id, del, mine && m.owner_hash);
       meta.appendChild(del);
+    }
+    if (isAdmin && !mine && m.client_id && !String(m.client_id).startsWith("ex-")) {
+      const k=document.createElement("button"); k.type="button"; k.className="kick"; k.textContent="내보내기";
+      k.onclick = () => askKick(m.client_id, m.nick, k);
+      meta.appendChild(k);
     }
     line.append(content, meta); col.appendChild(line); row.appendChild(col); list.appendChild(row);
     last = { cid: m.client_id, ts };
@@ -350,7 +374,58 @@ const BUCKET = "chat-media";
     c.replaceChildren(Object.assign(document.createElement("div"), { className:"gone", textContent:"삭제된 메시지예요" }));
     row.querySelector(".del")?.remove();
   }
-  async function askDelete(id, btn){
+  // ----- 방장: 내보내기 -----
+  async function askKick(cid, who, btn){
+    if (pendingKick !== cid + btn.dataset.k) {
+      document.querySelectorAll(".kick.confirm").forEach(b => { b.classList.remove("confirm"); b.textContent = "내보내기"; });
+      btn.dataset.k = String(Math.random()); pendingKick = cid + btn.dataset.k; btn.classList.add("confirm"); btn.textContent = "정말 내보내기";
+      const mark = pendingKick;
+      setTimeout(() => { if (pendingKick === mark) { pendingKick = null; btn.classList.remove("confirm"); btn.textContent = "내보내기"; } }, 3000);
+      return;
+    }
+    pendingKick = null; btn.disabled = true;
+    const { data, error } = await sb.rpc("admin_ban", { p_key: adminKey, p_client_id: cid });
+    if (error || data !== true) { btn.disabled = false; btn.classList.remove("confirm"); btn.textContent = "내보내기"; showNotice("내보내지 못했어요. 잠시 후 다시 해 주세요."); return; }
+    channel?.send({ type:"broadcast", event:"kick", payload:{ cid } });
+    toast(`${String(who || "그 사람").slice(0,20)} 님을 내보냈어요`);
+    renderPeople();
+  }
+  function showKicked(){
+    if (kicked) return; kicked = true;
+    $("kicked").hidden = false; msg.disabled = true; send.disabled = true; $("attach").disabled = true;
+    try { channel?.untrack(); sb?.removeChannel(channel); } catch {}
+  }
+
+  // ----- 접속자 목록 -----
+  function peopleNow(){
+    if (!channel) return [];
+    const st = channel.presenceState();
+    return Object.entries(st).map(([cid, metas]) => ({ cid, nick: String((metas[0] && metas[0].nick) || "이름 정하는 중").slice(0,20) }));
+  }
+  function renderPeople(){
+    const box = $("people"); if (box.hidden) return;
+    const list2 = peopleNow();
+    box.replaceChildren(Object.assign(document.createElement("h3"), { textContent: `지금 접속한 사람 ${list2.length}명` }));
+    for (const p of list2) {
+      const row = document.createElement("div"); row.className = "person";
+      const av = document.createElement("div"); av.className = "av"; av.style.background = colorFor(p.cid); av.textContent = p.nick.charAt(0).toUpperCase();
+      const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = p.nick;
+      row.append(av, nm);
+      if (p.cid === clientId) row.appendChild(Object.assign(document.createElement("span"), { className:"me", textContent:"나" }));
+      else if (isAdmin) { const k=document.createElement("button"); k.type="button"; k.className="kick"; k.textContent="내보내기"; k.onclick = () => askKick(p.cid, p.nick, k); row.appendChild(k); }
+      box.appendChild(row);
+    }
+  }
+  $("onlineBtn").onclick = (e) => {
+    const box = $("people"); e.stopPropagation();
+    if (!box.hidden) { box.hidden = true; return; }
+    const r = $("onlineBtn").getBoundingClientRect();
+    box.style.top = (r.bottom + window.scrollY + 6) + "px"; box.style.left = Math.max(16, r.left) + "px";
+    box.hidden = false; renderPeople();
+  };
+  document.addEventListener("click", e => { const box = $("people"); if (!box.hidden && !box.contains(e.target)) box.hidden = true; });
+
+  async function askDelete(id, btn, own){
     if (pendingDel !== id) {
       list.querySelectorAll(".del.confirm").forEach(b => { b.classList.remove("confirm"); b.textContent = "삭제"; });
       pendingDel = id; btn.classList.add("confirm"); btn.textContent = "정말 삭제";
@@ -359,7 +434,9 @@ const BUCKET = "chat-media";
     }
     pendingDel = null; btn.disabled = true;
     if (demo) { markDeleted(id); return; }
-    const { data, error } = await sb.rpc("delete_message", { p_id: id, p_key: secret });
+    const { data, error } = (own || !isAdmin)
+      ? await sb.rpc("delete_message", { p_id: id, p_key: secret })
+      : await sb.rpc("admin_delete_message", { p_key: adminKey, p_id: id });
     if (error || data !== true) { btn.disabled = false; btn.classList.remove("confirm"); btn.textContent = "삭제"; showNotice("삭제하지 못했어요. 이 기기에서 보낸 메시지만 지울 수 있어요."); return; }
     markDeleted(id); showNotice("");
   }
@@ -392,7 +469,7 @@ const BUCKET = "chat-media";
     if (!nick) return askNick();
     send.disabled = true;
     try { await insert({ body }); msg.value=""; autosize(); showNotice(""); }
-    catch { showNotice("메시지를 보내지 못했어요. 인터넷 연결을 확인하고 다시 보내주세요."); }
+    catch (err) { if (err && err.code === "42501") showKicked(); else showNotice("메시지를 보내지 못했어요. 인터넷 연결을 확인하고 다시 보내주세요."); }
     updateSend();
   });
 
@@ -495,6 +572,10 @@ const BUCKET = "chat-media";
     catch (e) { error = e; }
     if (error || !Array.isArray(data)) return false;
     sb = client; cfg = c;
+    // 내보내진 기기인지, 방장인지 먼저 확인
+    try { const b = await sb.from("banned").select("client_id").eq("client_id", clientId).limit(1); if (b.data && b.data.length) { showKicked(); return true; } } catch {}
+    if (adminKey) { try { const a = await sb.rpc("is_admin", { p_key: adminKey }); isAdmin = a.data === true; } catch {} }
+    $("adminBadge").hidden = !isAdmin;
     if (!nick) askNick();
     if (params.has("c")) { params.delete("c"); history.replaceState(null, "", location.pathname + (params.toString() ? "?" + params : "")); }
     if (!data.length) $("loading").textContent = "아직 대화가 없어요. 첫 메시지를 보내 보세요.";
@@ -513,9 +594,13 @@ const BUCKET = "chat-media";
         if (!payload || payload.cid === clientId) return;
         typers.set(String(payload.cid), { nick: String(payload.nick||"누군가").slice(0,20), t: Date.now() }); renderTyping();
       })
+      .on("broadcast", { event:"kick" }, ({ payload }) => {
+        if (payload && payload.cid === clientId) showKicked(); else renderPeople();
+      })
       .on("presence", { event:"sync" }, () => {
         const n = Object.keys(channel.presenceState()).length;
         $("online").textContent = n + "명 접속 중"; $("dot").classList.add("on");
+        renderPeople();
       })
       .subscribe(async status => {
         if (status === "SUBSCRIBED") { if (nick) await channel.track({ nick }); }
