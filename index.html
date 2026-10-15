@@ -127,7 +127,7 @@ textarea{flex:1;min-width:0;resize:none;border:1px solid var(--line);border-radi
   <div class="typing pad" id="typing"></div>
   <div class="notice pad" id="notice" hidden></div>
   <form id="form" class="pad">
-    <input type="file" id="file" accept="image/*,video/*" multiple hidden>
+    <input type="file" id="file" accept="image/*,video/*" hidden>
     <button class="icon attach" id="attach" type="button" aria-label="사진·동영상 보내기">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>
     </button>
@@ -587,12 +587,11 @@ const BUCKET = "chat-media";
     $("sendPreview").hidden = true; $("previewBox").replaceChildren();
   }
   $("file").addEventListener("change", () => {
-    pendingFiles = [...$("file").files].filter(f => f.type.startsWith("image/") || f.type.startsWith("video/"));
+    pendingFiles = [...$("file").files].filter(f => f.type.startsWith("image/") || f.type.startsWith("video/")).slice(0, 1);   // 한 번에 하나만
     $("file").value = "";
     if (!pendingFiles.length) { showNotice("사진이나 동영상만 보낼 수 있어요."); return; }
-    const hasVideo = pendingFiles.some(f => f.type.startsWith("video/")), hasImage = pendingFiles.some(f => f.type.startsWith("image/"));
-    const what = hasVideo && hasImage ? "사진과 동영상" : hasVideo ? "동영상" : "사진";
-    $("previewTitle").textContent = pendingFiles.length > 1 ? `이 ${what} ${pendingFiles.length}개를 보내시겠어요?` : `이 ${what}을 보내시겠어요?`;
+    const what = pendingFiles[0].type.startsWith("video/") ? "동영상" : "사진";
+    $("previewTitle").textContent = `이 ${what}을 보내시겠어요?`;
     const box = $("previewBox"); box.replaceChildren();
     for (const f of pendingFiles) {
       const u = URL.createObjectURL(f); previewUrls.push(u);
