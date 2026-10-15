@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f6b5c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="톡톡방">
+<meta name="description" content="링크만 받으면 바로 들어오는 채팅방. 글, 사진, 동영상을 주고받아요.">
+<title>톡톡방</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#eef3f2; --panel:#ffffff; --ink:#15211f; --muted:#62716e; --line:#d6e0de;
+  --mine:#0f6b5c; --mine-ink:#ffffff; --theirs:#ffffff; --accent:#0f6b5c; --soft:#dcebe7; --warn:#b4412b;
+  --f-display:"Black Han Sans","IBM Plex Sans KR",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f1716; --panel:#162220; --ink:#e4eeec; --muted:#8fa29e; --line:#263633;
+  --mine:#2fa58f; --mine-ink:#04130f; --theirs:#1c2b28; --accent:#4cc3ab; --soft:#1d302c; --warn:#ef8a73; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+.app{height:100%;display:flex;flex-direction:column;max-width:720px;margin:0 auto}
+.pad{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;align-items:center;gap:10px;padding-block:12px;border-bottom:1px solid var(--line)}
+h1{margin:0;font-family:var(--f-display);font-weight:400;font-size:24px;color:var(--accent);white-space:nowrap}
+.online{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.on{background:var(--accent)}
+.spacer{flex:1}
+.chip{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap;max-width:9em;overflow:hidden;text-overflow:ellipsis}
+button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{flex:1;overflow-y:auto;display:flex;flex-direction:column;padding-block:12px 16px;-webkit-overflow-scrolling:touch}
+.day{align-self:center;font-size:12px;color:var(--muted);background:var(--soft);border-radius:999px;padding:3px 12px;margin:14px 0 6px}
+.row{display:flex;gap:8px;align-items:flex-end;margin-top:3px}
+.row.first{margin-top:12px}
+.row.mine{flex-direction:row-reverse}
+.av{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:13px;font-weight:600;color:#fff}
+.av.ghost{visibility:hidden}
+.col{display:flex;flex-direction:column;min-width:0;max-width:78%}
+.mine .col{align-items:flex-end}
+.who{font-size:12px;color:var(--muted);margin:0 0 3px 4px}
+.line{display:flex;align-items:flex-end;gap:6px;min-width:0}
+.mine .line{flex-direction:row-reverse}
+.bubble{background:var(--theirs);color:var(--ink);border:1px solid var(--line);padding:8px 12px;border-radius:16px 16px 16px 4px;white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
+.mine .bubble{background:var(--mine);color:var(--mine-ink);border-color:transparent;border-radius:16px 16px 4px 16px}
+.media{border-radius:14px;overflow:hidden;background:var(--soft);border:1px solid var(--line);max-width:100%}
+.media img,.media video{display:block;max-width:min(260px,100%);max-height:340px;width:auto;height:auto}
+.media img{cursor:zoom-in}
+.time{font-size:11px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.meta{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.mine .meta{align-items:flex-start}
+.del{border:0;background:none;color:var(--muted);font:inherit;font-size:11px;cursor:pointer;padding:2px 0;text-decoration:underline}
+.del.confirm{color:var(--warn);font-weight:600}
+.gone{font-size:13px;color:var(--muted);font-style:italic;border:1px dashed var(--line);border-radius:14px;padding:6px 12px}
+.sys{align-self:center;font-size:12px;color:var(--muted);margin:10px 0;text-align:center}
+.typing{min-height:20px;font-size:12px;color:var(--muted)}
+.notice{font-size:13px;color:var(--warn);padding-block:4px}
+.uploads{display:flex;flex-direction:column;gap:4px;padding-block:4px}
+.up{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.bar{flex:1;height:4px;border-radius:2px;background:var(--soft);overflow:hidden}
+.bar i{display:block;height:100%;width:40%;background:var(--accent);animation:slide 1s infinite linear}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+form{display:flex;gap:8px;align-items:flex-end;padding-block:10px;border-top:1px solid var(--line);background:var(--panel)}
+textarea{flex:1;min-width:0;resize:none;border:1px solid var(--line);border-radius:20px;padding:10px 14px;font:inherit;font-size:16px;background:var(--bg);color:var(--ink);max-height:120px;line-height:1.4}
+.icon{width:42px;height:42px;border-radius:50%;border:0;cursor:pointer;display:grid;place-items:center;flex:none}
+.attach{background:var(--soft);color:var(--accent)}
+.send{background:var(--accent);color:var(--mine-ink)}
+.icon:disabled{opacity:.4;cursor:default}
+.overlay{position:fixed;inset:0;background:rgba(5,12,11,.88);display:grid;place-items:center;z-index:20;padding:16px}
+.overlay img{max-width:100%;max-height:100%;border-radius:8px}
+.card{background:var(--panel);color:var(--ink);border-radius:18px;padding:24px;width:min(360px,100%);display:flex;flex-direction:column;gap:12px}
+.card h2{margin:0;font-family:var(--f-display);font-weight:400;font-size:26px;color:var(--accent)}
+.card p{margin:0;color:var(--muted);font-size:14px}
+.card input{border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:inherit;font-size:16px;background:var(--bg);color:var(--ink)}
+.btn{border:0;border-radius:12px;padding:12px 16px;font:inherit;font-weight:600;background:var(--accent);color:var(--mine-ink);cursor:pointer}
+.btn:disabled{opacity:.45}
+.overlay.setup{place-items:start center;overflow-y:auto;background:var(--bg)}
+.setup .card{width:min(460px,100%);margin-block:24px;border:1px solid var(--line)}
+.setup ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.setup label{font-size:13px;font-weight:600;color:var(--muted)}
+.setup textarea{flex:none;border-radius:10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;height:90px;padding:8px}
+.setup a{color:var(--accent)}
+.ghostbtn{border:1px solid var(--line);border-radius:12px;padding:10px 14px;font:inherit;background:none;color:var(--ink);cursor:pointer}
+.small{font-size:12px;color:var(--muted)}
+.err{font-size:13px;color:var(--warn)}
+.demo{font-size:12px;text-align:center;background:var(--soft);color:var(--accent);padding:4px}
+.toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:13px;z-index:30}
+@media (prefers-reduced-motion:reduce){.bar i{animation:none;width:100%}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="demo" id="demoBar" hidden>미리보기 모드예요. 보낸 메시지는 이 화면에만 보이고 저장되지 않아요.</div>
+  <header class="pad">
+    <h1>톡톡방</h1>
+    <span class="online"><span class="dot" id="dot"></span><span id="online">연결 중…</span></span>
+    <span class="spacer"></span>
+    <button class="chip" id="inviteBtn" type="button">초대 링크</button>
+    <button class="chip" id="nickBtn" type="button">이름</button>
+  </header>
+  <main id="list" class="pad" aria-live="polite">
+    <div class="sys" id="loading">대화를 불러오는 중…</div>
+  </main>
+  <div class="uploads pad" id="uploads"></div>
+  <div class="typing pad" id="typing"></div>
+  <div class="notice pad" id="notice" hidden></div>
+  <form id="form" class="pad">
+    <input type="file" id="file" accept="image/*,video/*" multiple hidden>
+    <button class="icon attach" id="attach" type="button" aria-label="사진·동영상 보내기">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>
+    </button>
+    <textarea id="msg" rows="1" maxlength="2000" placeholder="메시지 입력" aria-label="메시지"></textarea>
+    <button class="icon send" id="send" type="submit" aria-label="보내기" disabled>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </button>
+  </form>
+</div>
+
+<div class="overlay" id="nickModal" hidden>
+  <form class="card" id="nickForm">
+    <h2>톡톡방</h2>
+    <p>대화방에서 쓸 이름을 정해 주세요. 나중에 오른쪽 위에서 바꿀 수 있어요.</p>
+    <input id="nickInput" maxlength="20" placeholder="예: 지성" autocomplete="nickname" required>
+    <button class="btn" type="submit">입장하기</button>
+  </form>
+</div>
+<div class="overlay setup" id="setup" hidden>
+  <form class="card" id="setupForm">
+    <h2>톡톡방 만들기</h2>
+    <p>대화와 사진을 저장할 무료 서버를 한 번만 연결하면 돼요. 그다음부터는 초대 링크만 보내면 친구가 바로 들어와요.</p>
+    <ol>
+      <li><a href="https://supabase.com/dashboard" target="_blank" rel="noopener">supabase.com</a>에서 GitHub로 로그인하고 <b>New project</b> (지역은 Seoul)</li>
+      <li>왼쪽 <b>SQL Editor</b>에 아래 내용을 붙여넣고 <b>Run</b></li>
+    </ol>
+    <textarea id="sqlBox" readonly aria-label="설치 SQL">-- 톡톡방 설치 SQL: Supabase &gt; SQL Editor에 통째로 붙여넣고 Run
+
+-- 1) 메시지 표
+create table if not exists public.messages (
+  id bigint generated always as identity primary key,
+  created_at timestamptz not null default now(),
+  room text not null default &#x27;lobby&#x27; check (char_length(room) &lt;= 40),
+  client_id text not null check (char_length(client_id) &lt;= 64),
+  nick text not null check (char_length(nick) between 1 and 20),
+  body text check (char_length(body) &lt;= 2000),
+  media_url text check (char_length(media_url) &lt;= 500),
+  media_type text check (media_type in (&#x27;image&#x27;, &#x27;video&#x27;)),
+  owner_hash text check (char_length(owner_hash) &lt;= 64),
+  check (body is not null or media_url is not null)
+);
+alter table public.messages add column if not exists owner_hash text;
+create index if not exists messages_room_id on public.messages (room, id desc);
+
+-- 2) 링크 받은 누구나 읽고 쓰기 (수정·삭제는 불가)
+alter table public.messages enable row level security;
+drop policy if exists &quot;anyone can read&quot; on public.messages;
+drop policy if exists &quot;anyone can write&quot; on public.messages;
+create policy &quot;anyone can read&quot; on public.messages for select to anon, authenticated using (true);
+create policy &quot;anyone can write&quot; on public.messages for insert to anon, authenticated with check (true);
+
+-- 2-1) 내가 보낸 메시지만 삭제 (기기에 저장된 비밀키로 확인)
+create or replace function public.delete_message(p_id bigint, p_key text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare n int;
+begin
+  delete from public.messages
+  where id = p_id
+    and owner_hash is not null
+    and owner_hash = encode(sha256(convert_to(p_key, &#x27;UTF8&#x27;)), &#x27;hex&#x27;);
+  get diagnostics n = row_count;
+  return n &gt; 0;
+end $$;
+revoke all on function public.delete_message(bigint, text) from public;
+grant execute on function public.delete_message(bigint, text) to anon, authenticated;
+
+-- 3) 실시간 전송 켜기
+do $$ begin
+  alter publication supabase_realtime add table public.messages;
+exception when duplicate_object then null; end $$;
+
+-- 4) 사진·동영상 저장소 (파일당 50MB)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (&#x27;chat-media&#x27;, &#x27;chat-media&#x27;, true, 52428800, array[&#x27;image/*&#x27;, &#x27;video/*&#x27;])
+on conflict (id) do update set public = true, file_size_limit = 52428800, allowed_mime_types = array[&#x27;image/*&#x27;, &#x27;video/*&#x27;];
+
+drop policy if exists &quot;chat media upload&quot; on storage.objects;
+drop policy if exists &quot;chat media read&quot; on storage.objects;
+create policy &quot;chat media upload&quot; on storage.objects for insert to anon, authenticated with check (bucket_id = &#x27;chat-media&#x27;);
+create policy &quot;chat media read&quot; on storage.objects for select to anon, authenticated using (bucket_id = &#x27;chat-media&#x27;);
+</textarea>
+    <button class="ghostbtn" type="button" id="copySql">SQL 복사</button>
+    <ol start="3"><li><b>Project Settings → API</b>에서 아래 두 값을 복사해 넣기</li></ol>
+    <label for="cfgUrl">Project URL</label>
+    <input id="cfgUrl" placeholder="https://abcdefgh.supabase.co" autocomplete="off" inputmode="url">
+    <label for="cfgKey">anon public 키 또는 Publishable key</label>
+    <input id="cfgKey" placeholder="eyJhbGciOi… 또는 sb_publishable_…" autocomplete="off">
+    <p class="small">service_role 키나 Secret key는 넣지 마세요. 관리자 열쇠라 초대 링크에 들어가면 안 돼요.</p>
+    <p class="err" id="cfgErr" hidden></p>
+    <button class="btn" type="submit" id="cfgBtn">연결하고 시작하기</button>
+    <button class="ghostbtn" type="button" id="demoBtn">서버 없이 미리보기</button>
+  </form>
+</div>
+<div class="overlay" id="viewer" hidden><img id="viewerImg" alt=""></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+/* 서버 주소는 앱 화면에서 연결하면 돼요. 코드에 고정하고 싶을 때만 아래 두 줄을 채우세요. */
+const SUPABASE_URL = "";
+const SUPABASE_KEY = "";
+
+const MAX_MB = 50;            // Supabase 무료 플랜 파일당 최대 50MB
+const BUCKET = "chat-media";
+
+(() => {
+  const $ = id => document.getElementById(id);
+  const list = $("list"), msg = $("msg"), send = $("send"), notice = $("notice");
+  const store = { get(k){ try{return localStorage.getItem(k)}catch{return null} }, set(k,v){ try{localStorage.setItem(k,v)}catch{} } };
+
+  const params = new URLSearchParams(location.search);
+  const room = (params.get("room") || "lobby").replace(/[^\w가-힣-]/g,"").slice(0,40) || "lobby";
+  let clientId = store.get("tt_cid");
+  if (!clientId) { clientId = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)+Date.now()); store.set("tt_cid", clientId); }
+  let nick = store.get("tt_nick") || "";
+  // 내 메시지 삭제용 비밀키 (이 기기에만 저장, 서버에는 해시만 저장)
+  let secret = store.get("tt_secret");
+  if (!secret) { const a = new Uint8Array(24); crypto.getRandomValues(a); secret = [...a].map(b=>b.toString(16).padStart(2,"0")).join(""); store.set("tt_secret", secret); }
+  let ownerHash = null;
+  const hashReady = (crypto.subtle ? crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret)) : Promise.reject())
+    .then(buf => { ownerHash = [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join(""); }).catch(()=>{});
+  let pendingDel = null;
+  let sb = null, channel = null, last = null, demo = false, cfg = null;
+  const shown = new Set();
+
+  // ----- 서버 설정: 코드 → 초대 링크(?c=) → 이 기기 저장 순서로 찾기 -----
+  const b64e = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  const b64d = s => decodeURIComponent(escape(atob(s.replace(/-/g,"+").replace(/_/g,"/"))));
+  function checkCfg(u, k){
+    u = (u||"").trim().replace(/\/+$/,""); k = (k||"").trim();
+    if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(u)) return { err: "Project URL은 https://로 시작하고 .supabase.co로 끝나야 해요." };
+    if (!k) return { err: "키를 넣어 주세요." };
+    if (/^sb_secret_/.test(k)) return { err: "이건 Secret key예요. Publishable key나 anon public 키를 넣어 주세요." };
+    if (k.startsWith("eyJ")) { try { if (JSON.parse(b64d(k.split(".")[1])).role === "service_role") return { err: "이건 service_role 키예요. anon public 키를 넣어 주세요." }; } catch {} }
+    return { u, k };
+  }
+  function findCfg(){
+    if (SUPABASE_URL && SUPABASE_KEY) return { u: SUPABASE_URL, k: SUPABASE_KEY, fixed: true };
+    const c = params.get("c");
+    if (c) { try { const o = JSON.parse(b64d(c)); const r = checkCfg(o.u, o.k); if (!r.err) { store.set("tt_cfg", JSON.stringify(r)); return r; } } catch {} }
+    try { const o = JSON.parse(store.get("tt_cfg") || "null"); if (o) { const r = checkCfg(o.u, o.k); if (!r.err) return r; } } catch {}
+    return null;
+  }
+  function inviteUrl(){
+    const q = new URLSearchParams();
+    if (room !== "lobby") q.set("room", room);
+    if (cfg && !cfg.fixed) q.set("c", b64e(JSON.stringify({ u: cfg.u, k: cfg.k })));
+    const s = q.toString();
+    return location.origin + location.pathname + (s ? "?" + s : "");
+  }
+
+  function toast(t){ const el=$("toast"); el.textContent=t; el.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>el.hidden=true,2200); }
+  function showNotice(t){ notice.textContent=t||""; notice.hidden=!t; }
+
+  // ----- 이름 -----
+  function askNick(){ $("nickInput").value = nick; $("nickModal").hidden = false; setTimeout(()=>$("nickInput").focus(),50); }
+  $("nickBtn").onclick = askNick;
+  $("nickForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const v = $("nickInput").value.trim().slice(0,20); if(!v) return;
+    nick = v; store.set("tt_nick", nick); $("nickBtn").textContent = nick; $("nickModal").hidden = true;
+    channel?.track({ nick }); updateSend(); msg.focus();
+  });
+
+  // ----- 초대 링크 -----
+  $("inviteBtn").onclick = async () => {
+    if (demo) { toast("서버를 연결하면 초대 링크를 보낼 수 있어요"); return; }
+    const url = inviteUrl();
+    if (navigator.share) { try { await navigator.share({ title:"톡톡방", text:"톡톡방에서 같이 얘기해요", url }); return; } catch(e){ if (e.name === "AbortError") return; } }
+    try { await navigator.clipboard.writeText(url); toast("초대 링크를 복사했어요"); } catch { prompt("이 링크를 복사해서 보내세요", url); }
+  };
+
+  // ----- 그리기 -----
+  const colors = ["#0f6b5c","#b4412b","#3a5cc7","#9a5b00","#7b3fa0","#1f7a3a","#a0306a","#2b6f8f"];
+  const colorFor = s => { let h=0; for (const c of s) h=(h*31+c.charCodeAt(0))>>>0; return colors[h%colors.length]; };
+  const fmtTime = ts => new Date(ts).toLocaleTimeString("ko-KR",{hour:"numeric",minute:"2-digit"});
+  const fmtDay = ts => new Date(ts).toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric",weekday:"long"});
+  const dayKey = ts => new Date(ts).toDateString();
+  const nearBottom = () => list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+  const toBottom = () => { list.scrollTop = list.scrollHeight; };
+
+  function append(m, stick){
+    if (shown.has(m.id)) return; shown.add(m.id);
+    $("loading")?.remove();
+    const ts = new Date(m.created_at).getTime();
+    if (!last || dayKey(last.ts) !== dayKey(ts)) {
+      const d = document.createElement("div"); d.className="day"; d.textContent=fmtDay(ts); list.appendChild(d); last = null;
+    }
+    const mine = m.client_id === clientId;
+    const grouped = last && last.cid === m.client_id && ts - last.ts < 3*60*1000;
+    const row = document.createElement("div"); row.className = "row" + (mine?" mine":"") + (grouped?"":" first"); row.dataset.id = m.id;
+    if (!mine) {
+      const av = document.createElement("div"); av.className = "av" + (grouped?" ghost":"");
+      av.style.background = colorFor(m.client_id); av.textContent = (m.nick||"?").trim().charAt(0).toUpperCase(); row.appendChild(av);
+    }
+    const col = document.createElement("div"); col.className="col";
+    if (!mine && !grouped) { const w=document.createElement("div"); w.className="who"; w.textContent=m.nick||"익명"; col.appendChild(w); }
+    const line = document.createElement("div"); line.className="line";
+    const content = document.createElement("div"); content.style.cssText="display:flex;flex-direction:column;gap:4px;min-width:0" + (mine?";align-items:flex-end":"");
+    if (m.media_url && (/^https:\/\//.test(m.media_url) || (demo && /^blob:/.test(m.media_url)))) {
+      const box = document.createElement("div"); box.className="media";
+      if (m.media_type === "video") {
+        const v = document.createElement("video"); v.src=m.media_url; v.controls=true; v.playsInline=true; v.preload="metadata";
+        v.addEventListener("loadedmetadata", () => { if (stick) toBottom(); }); box.appendChild(v);
+      } else {
+        const img = document.createElement("img"); img.src=m.media_url; img.alt="보낸 사진"; img.loading="lazy";
+        img.onload = () => { if (stick) toBottom(); };
+        img.onclick = () => { $("viewerImg").src = m.media_url; $("viewer").hidden = false; };
+        box.appendChild(img);
+      }
+      content.appendChild(box);
+    }
+    if (m.body) { const b=document.createElement("div"); b.className="bubble"; b.textContent=m.body; content.appendChild(b); }
+    content.className = "content";
+    const meta=document.createElement("div"); meta.className="meta";
+    const t=document.createElement("span"); t.className="time"; t.textContent=fmtTime(ts); meta.appendChild(t);
+    if (mine && m.owner_hash) {
+      const del=document.createElement("button"); del.type="button"; del.className="del"; del.textContent="삭제";
+      del.onclick = () => askDelete(m.id, del);
+      meta.appendChild(del);
+    }
+    line.append(content, meta); col.appendChild(line); row.appendChild(col); list.appendChild(row);
+    last = { cid: m.client_id, ts };
+    if (stick) toBottom();
+  }
+  function markDeleted(id){
+    const row = list.querySelector(`.row[data-id="${Number(id)}"]`); if (!row) return;
+    const c = row.querySelector(".content"); if (!c) return;
+    c.querySelectorAll("video").forEach(v => { v.pause(); v.removeAttribute("src"); v.load(); });
+    c.replaceChildren(Object.assign(document.createElement("div"), { className:"gone", textContent:"삭제된 메시지예요" }));
+    row.querySelector(".del")?.remove();
+  }
+  async function askDelete(id, btn){
+    if (pendingDel !== id) {
+      list.querySelectorAll(".del.confirm").forEach(b => { b.classList.remove("confirm"); b.textContent = "삭제"; });
+      pendingDel = id; btn.classList.add("confirm"); btn.textContent = "정말 삭제";
+      setTimeout(() => { if (pendingDel === id) { pendingDel = null; btn.classList.remove("confirm"); btn.textContent = "삭제"; } }, 3000);
+      return;
+    }
+    pendingDel = null; btn.disabled = true;
+    if (demo) { markDeleted(id); return; }
+    const { data, error } = await sb.rpc("delete_message", { p_id: id, p_key: secret });
+    if (error || data !== true) { btn.disabled = false; btn.classList.remove("confirm"); btn.textContent = "삭제"; showNotice("삭제하지 못했어요. 이 기기에서 보낸 메시지만 지울 수 있어요."); return; }
+    markDeleted(id); showNotice("");
+  }
+  $("viewer").onclick = () => { $("viewer").hidden = true; $("viewerImg").src = ""; };
+
+  // ----- 보내기 -----
+  const ready = () => !!sb || demo;
+  function updateSend(){ send.disabled = !ready() || !nick || !msg.value.trim(); }
+  function autosize(){ msg.style.height="auto"; msg.style.height=Math.min(msg.scrollHeight,120)+"px"; }
+  let typingSent = 0;
+  msg.addEventListener("input", () => {
+    autosize(); updateSend();
+    if (channel && msg.value.trim() && Date.now()-typingSent > 2000) { typingSent = Date.now(); channel.send({type:"broadcast",event:"typing",payload:{nick,cid:clientId}}); }
+  });
+  msg.addEventListener("keydown", e => {
+    if (e.key==="Enter" && !e.shiftKey && !e.isComposing && matchMedia("(pointer:fine)").matches) { e.preventDefault(); $("form").requestSubmit(); }
+  });
+
+  async function insert(row){
+    await hashReady;
+    if (demo) { append({ id: Date.now(), created_at: new Date().toISOString(), room, client_id: clientId, nick, owner_hash: "demo", body: null, media_url: null, media_type: null, ...row }, true); return; }
+    const { data, error } = await sb.from("messages").insert({ room, client_id: clientId, nick, owner_hash: ownerHash, ...row }).select().single();
+    if (error) throw error;
+    append(data, true);
+  }
+
+  $("form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const body = msg.value.trim(); if (!body || !ready()) return;
+    if (!nick) return askNick();
+    send.disabled = true;
+    try { await insert({ body }); msg.value=""; autosize(); showNotice(""); }
+    catch { showNotice("메시지를 보내지 못했어요. 인터넷 연결을 확인하고 다시 보내주세요."); }
+    updateSend();
+  });
+
+  // ----- 사진·동영상 -----
+  $("attach").onclick = () => { if (!nick) return askNick(); $("file").click(); };
+  $("file").addEventListener("change", async () => {
+    const files = [...$("file").files]; $("file").value = "";
+    for (const f of files) await uploadOne(f);
+  });
+
+  async function shrinkImage(file){
+    if (!/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type) || !window.createImageBitmap) return file;
+    try {
+      const bmp = await createImageBitmap(file);
+      const max = 1600, s = Math.min(1, max / Math.max(bmp.width, bmp.height));
+      if (s === 1 && file.size < 1.5*1024*1024) return file;
+      const c = document.createElement("canvas"); c.width = Math.round(bmp.width*s); c.height = Math.round(bmp.height*s);
+      c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+      return blob ? new File([blob], file.name.replace(/\.\w+$/,"") + ".jpg", { type:"image/jpeg" }) : file;
+    } catch { return file; }
+  }
+
+  async function uploadOne(file){
+    const isVideo = file.type.startsWith("video/"), isImage = file.type.startsWith("image/");
+    if (!isVideo && !isImage) { showNotice("사진이나 동영상만 보낼 수 있어요."); return; }
+    const row = document.createElement("div"); row.className="up";
+    const label = document.createElement("span"); label.textContent = (isVideo?"동영상":"사진") + " 올리는 중…";
+    const bar = document.createElement("div"); bar.className="bar"; bar.innerHTML="<i></i>";
+    row.append(label, bar); $("uploads").appendChild(row);
+    try {
+      const out = isImage ? await shrinkImage(file) : file;
+      if (out.size > MAX_MB*1024*1024) { showNotice(`파일이 너무 커요. ${MAX_MB}MB 이하만 보낼 수 있어요. (지금 ${(out.size/1048576).toFixed(0)}MB)`); return; }
+      if (demo) { await insert({ media_url: URL.createObjectURL(out), media_type: isVideo ? "video" : "image" }); return; }
+      const ext = (out.name.split(".").pop() || (isVideo?"mp4":"jpg")).toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,5) || "bin";
+      const path = `${room}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+      const { error } = await sb.storage.from(BUCKET).upload(path, out, { contentType: out.type || undefined, upsert:false });
+      if (error) throw error;
+      const { data } = sb.storage.from(BUCKET).getPublicUrl(path);
+      await insert({ media_url: data.publicUrl, media_type: isVideo ? "video" : "image" });
+      showNotice("");
+    } catch (err) {
+      showNotice("올리지 못했어요. " + (err && err.message && /size|large/i.test(err.message) ? `${MAX_MB}MB 이하 파일만 보낼 수 있어요.` : "연결을 확인하고 다시 시도해 주세요."));
+    } finally { row.remove(); }
+  }
+
+  // ----- 접속자·입력 중 -----
+  const typers = new Map();
+  function renderTyping(){
+    const now = Date.now(); for (const [k,v] of typers) if (now - v.t > 3500) typers.delete(k);
+    $("typing").textContent = typers.size ? [...typers.values()].map(v=>v.nick).join(", ") + " 님이 입력 중…" : "";
+  }
+  setInterval(renderTyping, 1000);
+
+  // ----- 시작 -----
+  // ----- 서버 연결 화면 -----
+  $("copySql").onclick = async () => {
+    try { await navigator.clipboard.writeText($("sqlBox").value); toast("SQL을 복사했어요"); }
+    catch { $("sqlBox").focus(); $("sqlBox").select(); toast("선택됐어요. 길게 눌러 복사하세요"); }
+  };
+  $("demoBtn").onclick = () => {
+    demo = true; $("setup").hidden = true; $("demoBar").hidden = false;
+    $("online").textContent = "미리보기"; $("dot").classList.add("on");
+    if (!nick) { nick = "나"; $("nickBtn").textContent = nick; }
+    const now = Date.now();
+    $("loading").textContent = "아래는 예시 대화예요.";
+    [{ id:1, client_id:"ex-a", nick:"민지", body:"다들 토요일에 시간 돼?", created_at:new Date(now-600000).toISOString() },
+     { id:2, client_id:"ex-b", nick:"준호", body:"난 오후부터 괜찮아", created_at:new Date(now-540000).toISOString() },
+     { id:3, client_id:"ex-a", nick:"민지", body:"그럼 3시에 보자!", created_at:new Date(now-500000).toISOString() }]
+     .forEach(m => append(m, true));
+    updateSend();
+  };
+  $("setupForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const r = checkCfg($("cfgUrl").value, $("cfgKey").value), er = $("cfgErr");
+    if (r.err) { er.textContent = r.err; er.hidden = false; return; }
+    er.hidden = true; $("cfgBtn").disabled = true; $("cfgBtn").textContent = "연결 확인 중…";
+    const ok = await connect(r);
+    $("cfgBtn").disabled = false; $("cfgBtn").textContent = "연결하고 시작하기";
+    if (!ok) { er.textContent = "연결하지 못했어요. 주소와 키가 맞는지, 2번 SQL을 실행했는지 확인해 주세요."; er.hidden = false; return; }
+    store.set("tt_cfg", JSON.stringify(r)); $("setup").hidden = true;
+    toast("연결됐어요. 오른쪽 위 '초대 링크'로 친구를 불러보세요");
+  });
+
+  async function start(){
+    $("nickBtn").textContent = nick || "이름";
+    if (!window.supabase) { $("loading").textContent = "앱을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요."; return; }
+    const found = findCfg();
+    if (!found) { $("loading").textContent = "서버를 연결하면 대화가 시작돼요."; $("online").textContent = "연결 전"; $("setup").hidden = false; return; }
+    if (!(await connect(found))) {
+      $("loading").textContent = "대화를 불러오지 못했어요. 잠시 후 새로고침해 주세요. 계속 안 되면 방을 만든 사람에게 서버가 켜져 있는지 물어보세요.";
+      $("online").textContent = "연결 안 됨";
+    }
+  }
+
+  async function connect(c){
+    const client = window.supabase.createClient(c.u, c.k);
+    let data, error;
+    try { ({ data, error } = await client.from("messages").select("*").eq("room", room).order("id", { ascending:false }).limit(100)); }
+    catch (e) { error = e; }
+    if (error || !Array.isArray(data)) return false;
+    sb = client; cfg = c;
+    if (!nick) askNick();
+    if (params.has("c")) { params.delete("c"); history.replaceState(null, "", location.pathname + (params.toString() ? "?" + params : "")); }
+    if (!data.length) $("loading").textContent = "아직 대화가 없어요. 첫 메시지를 보내 보세요.";
+    data.reverse().forEach(m => append(m, false)); toBottom();
+    updateSend();
+
+    channel = sb.channel("room:" + room, { config: { presence: { key: clientId } } })
+      .on("postgres_changes", { event:"INSERT", schema:"public", table:"messages", filter:`room=eq.${room}` }, p => {
+        const stick = nearBottom() || p.new.client_id === clientId; append(p.new, stick);
+        typers.delete(p.new.client_id); renderTyping();
+      })
+      .on("postgres_changes", { event:"DELETE", schema:"public", table:"messages" }, p => {
+        if (p.old && p.old.id != null) markDeleted(p.old.id);
+      })
+      .on("broadcast", { event:"typing" }, ({ payload }) => {
+        if (!payload || payload.cid === clientId) return;
+        typers.set(String(payload.cid), { nick: String(payload.nick||"누군가").slice(0,20), t: Date.now() }); renderTyping();
+      })
+      .on("presence", { event:"sync" }, () => {
+        const n = Object.keys(channel.presenceState()).length;
+        $("online").textContent = n + "명 접속 중"; $("dot").classList.add("on");
+      })
+      .subscribe(async status => {
+        if (status === "SUBSCRIBED") { if (nick) await channel.track({ nick }); }
+        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") { $("online").textContent = "다시 연결 중…"; $("dot").classList.remove("on"); }
+      });
+    return true;
+  }
+  start();
+})();
+</script>
+</body>
+</html>
