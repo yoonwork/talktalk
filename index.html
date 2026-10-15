@@ -638,7 +638,7 @@ const BUCKET = "chat-media";
         renderPeople();
       })
       .subscribe(async status => {
-        if (status === "SUBSCRIBED") { if (nick) await channel.track({ nick }); }
+        if (status === "SUBSCRIBED") { $("online").textContent = "연결됨"; $("dot").classList.add("on"); await channel.track({ nick: nick || "" }); }
         else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") { $("online").textContent = "다시 연결 중…"; $("dot").classList.remove("on"); }
       });
     return true;
