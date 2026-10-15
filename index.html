@@ -103,6 +103,8 @@ textarea{flex:1;min-width:0;resize:none;border:1px solid var(--line);border-radi
 .small{font-size:12px;color:var(--muted)}
 .err{font-size:13px;color:var(--warn)}
 .demo{font-size:12px;text-align:center;background:var(--soft);color:var(--accent);padding:4px}
+.previewbox{display:flex;gap:8px;overflow-x:auto;max-height:50vh}
+.previewbox img,.previewbox video{max-height:48vh;max-width:100%;border-radius:10px;flex:none;object-fit:contain;background:var(--soft)}
 .toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:13px;z-index:30}
 @media (prefers-reduced-motion:reduce){.bar i{animation:none;width:100%}}
 </style>
@@ -237,6 +239,16 @@ create policy &quot;chat media read&quot; on storage.objects for select to anon,
     <p class="err" id="passErr" hidden></p>
     <button class="btn" type="submit" id="passBtn">입장하기</button>
   </form>
+</div>
+<div class="overlay" id="sendPreview" hidden>
+  <div class="card">
+    <h2 id="previewTitle" style="font-size:20px">이 사진을 보내시겠어요?</h2>
+    <div class="previewbox" id="previewBox"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="ghostbtn" type="button" id="previewCancel">취소</button>
+      <button class="btn" type="button" id="previewSend">보내기</button>
+    </div>
+  </div>
 </div>
 <div class="overlay" id="viewer" hidden><img id="viewerImg" alt=""></div>
 <div class="people" id="people" hidden></div>
@@ -562,10 +574,33 @@ const BUCKET = "chat-media";
 
   // ----- 사진·동영상 -----
   $("attach").onclick = () => { if (!nick) return askNick(); $("file").click(); };
-  $("file").addEventListener("change", async () => {
-    const files = [...$("file").files]; $("file").value = "";
-    for (const f of files) await uploadOne(f);
+  // 보내기 전에 미리 보여주고 물어보기
+  let pendingFiles = [], previewUrls = [];
+  function closePreview(){
+    previewUrls.forEach(u => URL.revokeObjectURL(u)); previewUrls = []; pendingFiles = [];
+    $("sendPreview").hidden = true; $("previewBox").replaceChildren();
+  }
+  $("file").addEventListener("change", () => {
+    pendingFiles = [...$("file").files].filter(f => f.type.startsWith("image/") || f.type.startsWith("video/"));
+    $("file").value = "";
+    if (!pendingFiles.length) { showNotice("사진이나 동영상만 보낼 수 있어요."); return; }
+    const hasVideo = pendingFiles.some(f => f.type.startsWith("video/")), hasImage = pendingFiles.some(f => f.type.startsWith("image/"));
+    const what = hasVideo && hasImage ? "사진과 동영상" : hasVideo ? "동영상" : "사진";
+    $("previewTitle").textContent = pendingFiles.length > 1 ? `이 ${what} ${pendingFiles.length}개를 보내시겠어요?` : `이 ${what}을 보내시겠어요?`;
+    const box = $("previewBox"); box.replaceChildren();
+    for (const f of pendingFiles) {
+      const u = URL.createObjectURL(f); previewUrls.push(u);
+      const el = f.type.startsWith("video/") ? Object.assign(document.createElement("video"), { src: u, muted: true, playsInline: true, controls: true, preload: "metadata" })
+                                              : Object.assign(document.createElement("img"), { src: u, alt: "보낼 사진" });
+      box.appendChild(el);
+    }
+    $("sendPreview").hidden = false;
   });
+  $("previewCancel").onclick = closePreview;
+  $("previewSend").onclick = async () => {
+    const files = pendingFiles.slice(); closePreview();
+    for (const f of files) await uploadOne(f);
+  };
 
   async function shrinkImage(file){
     if (!/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type) || !window.createImageBitmap) return file;
