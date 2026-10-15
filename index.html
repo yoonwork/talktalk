@@ -274,7 +274,13 @@ const BUCKET = "chat-media";
 (() => {
   const $ = id => document.getElementById(id);
   const list = $("list"), msg = $("msg"), send = $("send"), notice = $("notice");
-  const store = { get(k){ try{return localStorage.getItem(k)}catch{return null} }, set(k,v){ try{localStorage.setItem(k,v)}catch{} } };
+  const cookieGet = k => { const m = document.cookie.match(new RegExp("(?:^|; )" + k + "=([^;]*)")); return m ? decodeURIComponent(m[1]) : null; };
+  const cookieSet = (k, v) => { try { document.cookie = k + "=" + encodeURIComponent(v) + "; max-age=31536000; path=/; SameSite=Lax; Secure"; } catch {} };
+  // 이 기기에 기억하기: 저장소가 막힌 브라우저(앱 안 브라우저 등)를 위해 쿠키에도 같이 저장
+  const store = {
+    get(k){ let v = null; try { v = localStorage.getItem(k); } catch {} return v ?? cookieGet(k); },
+    set(k, v){ try { localStorage.setItem(k, v); } catch {} cookieSet(k, v); }
+  };
 
   const params = new URLSearchParams(location.search);
   const room = (params.get("room") || "lobby").replace(/[^\w가-힣-]/g,"").slice(0,40) || "lobby";
@@ -300,7 +306,7 @@ const BUCKET = "chat-media";
     if (a) { store.set("tt_admin", a); p.delete("admin"); history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : "")); }
     adminKey = store.get("tt_admin");
     const lp = p.get("p");
-    if (lp) { store.set("tt_pass", lp); p.delete("p"); history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : "")); }
+    if (lp) store.set("tt_pass", lp);   // 링크 주소에 남겨 둬서 새로고침해도 다시 안 물어봐요
     window.__linkPass = lp || ""; }
   let sb = null, channel = null, last = null, demo = false, cfg = null;
   const shown = new Set();
