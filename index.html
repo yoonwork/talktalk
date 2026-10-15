@@ -140,6 +140,12 @@ textarea{flex:1;min-width:0;resize:none;border:1px solid var(--line);border-radi
     <p>대화방에서 쓸 이름을 정해 주세요. 나중에 오른쪽 위에서 바꿀 수 있어요.</p>
     <input id="nickInput" maxlength="20" placeholder="예: 톡톡이" autocomplete="nickname" required>
     <button class="btn" type="submit">입장하기</button>
+    <button class="ghostbtn" type="button" id="adminLink">방장 되기</button>
+    <div id="adminBox" hidden style="display:flex;flex-direction:column;gap:8px">
+      <input id="adminInput" maxlength="80" placeholder="방장 코드 입력" autocomplete="off" aria-label="방장 코드">
+      <button class="btn" type="button" id="adminOk">확인</button>
+      <p class="err" id="adminErr" hidden></p>
+    </div>
   </form>
 </div>
 <div class="overlay setup" id="setup" hidden>
@@ -253,7 +259,12 @@ const BUCKET = "chat-media";
   let ownerHash = null;
   const hashReady = (crypto.subtle ? crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret)) : Promise.reject())
     .then(buf => { ownerHash = [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join(""); }).catch(()=>{});
-  let pendingDel = null, pendingKick = null, isAdmin = false, kicked = false;
+  let pendingDel = null, pendingKick = null, isAdmin = false, kicked = false, adminIds = new Set();
+  const adminTag = () => Object.assign(document.createElement("span"), { className:"admin", textContent:"방장" });
+  async function loadAdminIds(){
+    if (!sb) return;
+    try { const r = await sb.from("admin_devices").select("client_id").limit(200); if (r.data) adminIds = new Set(r.data.map(x => x.client_id)); } catch {}
+  }
   // 방장 열쇠: ?admin=열쇠 로 한 번 열면 이 기기에 저장돼요
   let adminKey = null;
   { const p = new URLSearchParams(location.search); const a = p.get("admin");
@@ -301,6 +312,21 @@ const BUCKET = "chat-media";
     channel?.track({ nick }); updateSend(); msg.focus();
   });
 
+  // ----- 방장 되기 -----
+  $("adminLink").onclick = () => { $("adminBox").hidden = false; $("adminLink").hidden = true; $("adminInput").focus(); };
+  $("adminOk").onclick = async () => {
+    const code = $("adminInput").value.trim(), er = $("adminErr");
+    if (!code || !sb) return;
+    $("adminOk").disabled = true;
+    let ok = false;
+    try { const r = await sb.rpc("is_admin", { p_key: code }); ok = r.data === true; } catch {}
+    $("adminOk").disabled = false;
+    if (!ok) { er.textContent = "방장 코드가 맞지 않아요."; er.hidden = false; return; }
+    store.set("tt_admin", code);
+    if (!nick && $("nickInput").value.trim()) { nick = $("nickInput").value.trim().slice(0,20); store.set("tt_nick", nick); }
+    location.reload();
+  };
+
   // ----- 초대 링크 -----
   $("inviteBtn").onclick = async () => {
     if (demo) { toast("서버를 연결하면 초대 링크를 보낼 수 있어요"); return; }
@@ -333,7 +359,11 @@ const BUCKET = "chat-media";
       av.style.background = colorFor(m.client_id); av.textContent = (m.nick||"?").trim().charAt(0).toUpperCase(); row.appendChild(av);
     }
     const col = document.createElement("div"); col.className="col";
-    if (!mine && !grouped) { const w=document.createElement("div"); w.className="who"; w.textContent=m.nick||"익명"; col.appendChild(w); }
+    if (!mine && !grouped) {
+      const w=document.createElement("div"); w.className="who"; w.textContent=m.nick||"익명";
+      if (adminIds.has(m.client_id)) { w.append(" "); w.appendChild(adminTag()); }
+      col.appendChild(w);
+    }
     const line = document.createElement("div"); line.className="line";
     const content = document.createElement("div"); content.style.cssText="display:flex;flex-direction:column;gap:4px;min-width:0" + (mine?";align-items:flex-end":"");
     if (m.media_url && (/^https:\/\//.test(m.media_url) || (demo && /^blob:/.test(m.media_url)))) {
@@ -358,7 +388,7 @@ const BUCKET = "chat-media";
       del.onclick = () => askDelete(m.id, del, mine && m.owner_hash);
       meta.appendChild(del);
     }
-    if (isAdmin && !mine && m.client_id && !String(m.client_id).startsWith("ex-")) {
+    if (isAdmin && !mine && m.client_id && !String(m.client_id).startsWith("ex-") && !adminIds.has(m.client_id)) {
       const k=document.createElement("button"); k.type="button"; k.className="kick"; k.textContent="내보내기";
       k.onclick = () => askKick(m.client_id, m.nick, k);
       meta.appendChild(k);
@@ -411,8 +441,9 @@ const BUCKET = "chat-media";
       const av = document.createElement("div"); av.className = "av"; av.style.background = colorFor(p.cid); av.textContent = p.nick.charAt(0).toUpperCase();
       const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = p.nick;
       row.append(av, nm);
+      if (adminIds.has(p.cid)) row.appendChild(adminTag());
       if (p.cid === clientId) row.appendChild(Object.assign(document.createElement("span"), { className:"me", textContent:"나" }));
-      else if (isAdmin) { const k=document.createElement("button"); k.type="button"; k.className="kick"; k.textContent="내보내기"; k.onclick = () => askKick(p.cid, p.nick, k); row.appendChild(k); }
+      else if (isAdmin && !adminIds.has(p.cid)) { const k=document.createElement("button"); k.type="button"; k.className="kick"; k.textContent="내보내기"; k.onclick = () => askKick(p.cid, p.nick, k); row.appendChild(k); }
       box.appendChild(row);
     }
   }
@@ -575,7 +606,10 @@ const BUCKET = "chat-media";
     // 내보내진 기기인지, 방장인지 먼저 확인
     try { const b = await sb.from("banned").select("client_id").eq("client_id", clientId).limit(1); if (b.data && b.data.length) { showKicked(); return true; } } catch {}
     if (adminKey) { try { const a = await sb.rpc("is_admin", { p_key: adminKey }); isAdmin = a.data === true; } catch {} }
+    if (isAdmin) { try { await sb.rpc("admin_register", { p_key: adminKey, p_client_id: clientId }); } catch {} }
     $("adminBadge").hidden = !isAdmin;
+    $("adminLink").hidden = isAdmin;
+    await loadAdminIds();
     if (!nick) askNick();
     if (params.has("c")) { params.delete("c"); history.replaceState(null, "", location.pathname + (params.toString() ? "?" + params : "")); }
     if (!data.length) $("loading").textContent = "아직 대화가 없어요. 첫 메시지를 보내 보세요.";
@@ -600,6 +634,7 @@ const BUCKET = "chat-media";
       .on("presence", { event:"sync" }, () => {
         const n = Object.keys(channel.presenceState()).length;
         $("online").textContent = n + "명 접속 중"; $("dot").classList.add("on");
+        if (!loadAdminIds.t || Date.now() - loadAdminIds.t > 10000) { loadAdminIds.t = Date.now(); loadAdminIds().then(renderPeople); }
         renderPeople();
       })
       .subscribe(async status => {
