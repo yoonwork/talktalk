@@ -229,6 +229,15 @@ create policy &quot;chat media read&quot; on storage.objects for select to anon,
     <button class="ghostbtn" type="button" id="demoBtn">서버 없이 미리보기</button>
   </form>
 </div>
+<div class="overlay" id="passModal" hidden>
+  <form class="card" id="passForm">
+    <h2>톡톡방</h2>
+    <p>비밀번호가 걸린 대화방이에요. 방장에게 받은 비밀번호를 입력해 주세요.</p>
+    <input id="passInput" type="password" inputmode="numeric" maxlength="40" placeholder="비밀번호" autocomplete="off" aria-label="비밀번호">
+    <p class="err" id="passErr" hidden></p>
+    <button class="btn" type="submit" id="passBtn">입장하기</button>
+  </form>
+</div>
 <div class="overlay" id="viewer" hidden><img id="viewerImg" alt=""></div>
 <div class="people" id="people" hidden></div>
 <div class="people" id="adminMenu" hidden>
@@ -629,14 +638,37 @@ const BUCKET = "chat-media";
     if (!window.supabase) { $("loading").textContent = "앱을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요."; return; }
     const found = findCfg();
     if (!found) { $("loading").textContent = "서버를 연결하면 대화가 시작돼요."; $("online").textContent = "연결 전"; $("setup").hidden = false; return; }
+    if (!(await passGate(found))) return;
     if (!(await connect(found))) {
       $("loading").textContent = "대화를 불러오지 못했어요. 잠시 후 새로고침해 주세요. 계속 안 되면 방을 만든 사람에게 서버가 켜져 있는지 물어보세요.";
       $("online").textContent = "연결 안 됨";
     }
   }
 
+  // ----- 비밀번호 -----
+  let roomPass = store.get("tt_pass") || "";
+  async function checkPass(c, p){
+    try { const r = await window.supabase.createClient(c.u, c.k).rpc("check_pass", { p }); return r.error ? null : r.data === true; } catch { return null; }
+  }
+  async function passGate(c){
+    const ok = await checkPass(c, roomPass);
+    if (ok !== false) return true;          // 맞거나, 아직 비밀번호 기능이 없는 서버
+    $("passModal").hidden = false; setTimeout(() => $("passInput").focus(), 50);
+    return await new Promise(resolve => {
+      $("passForm").onsubmit = async e => {
+        e.preventDefault();
+        const v = $("passInput").value.trim(); if (!v) return;
+        $("passBtn").disabled = true;
+        const good = await checkPass(c, v);
+        $("passBtn").disabled = false;
+        if (good !== true) { $("passErr").textContent = "비밀번호가 맞지 않아요."; $("passErr").hidden = false; $("passInput").select(); return; }
+        roomPass = v; store.set("tt_pass", v); $("passModal").hidden = true; resolve(true);
+      };
+    });
+  }
+
   async function connect(c){
-    const client = window.supabase.createClient(c.u, c.k);
+    const client = window.supabase.createClient(c.u, c.k, { global: { headers: { "x-room-pass": roomPass } } });
     let data, error;
     try { ({ data, error } = await client.from("messages").select("*").eq("room", room).order("id", { ascending:false }).limit(100)); }
     catch (e) { error = e; }
