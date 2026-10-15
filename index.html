@@ -286,7 +286,10 @@ const BUCKET = "chat-media";
   let adminKey = null;
   { const p = new URLSearchParams(location.search); const a = p.get("admin");
     if (a) { store.set("tt_admin", a); p.delete("admin"); history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : "")); }
-    adminKey = store.get("tt_admin"); }
+    adminKey = store.get("tt_admin");
+    const lp = p.get("p");
+    if (lp) { store.set("tt_pass", lp); p.delete("p"); history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : "")); }
+    window.__linkPass = lp || ""; }
   let sb = null, channel = null, last = null, demo = false, cfg = null;
   const shown = new Set();
 
@@ -312,6 +315,7 @@ const BUCKET = "chat-media";
     const q = new URLSearchParams();
     if (room !== "lobby") q.set("room", room);
     if (cfg && !cfg.fixed) q.set("c", b64e(JSON.stringify({ u: cfg.u, k: cfg.k })));
+    if (roomPass) q.set("p", roomPass);
     const s = q.toString();
     return location.origin + location.pathname + (s ? "?" + s : "");
   }
@@ -654,7 +658,7 @@ const BUCKET = "chat-media";
     return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
   }
   // ----- 비밀번호 -----
-  let roomPass = store.get("tt_pass") || "";
+  let roomPass = window.__linkPass || store.get("tt_pass") || "";
   async function checkPass(c, p){
     try { const r = await window.supabase.createClient(c.u, c.k).rpc("check_pass", { p }); return r.error ? null : r.data === true; } catch { return null; }
   }
