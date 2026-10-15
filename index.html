@@ -305,9 +305,8 @@ const BUCKET = "chat-media";
   { const p = new URLSearchParams(location.search); const a = p.get("admin");
     if (a) { store.set("tt_admin", a); p.delete("admin"); history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : "")); }
     adminKey = store.get("tt_admin");
-    const lp = p.get("p");
-    if (lp) store.set("tt_pass", lp);   // 링크 주소에 남겨 둬서 새로고침해도 다시 안 물어봐요
-    window.__linkPass = lp || ""; }
+    // 링크에 비밀번호를 넣어 들어오는 방식은 쓰지 않아요: 붙어 있으면 지우기만 해요
+    if (p.has("p")) { p.delete("p"); history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : "")); } }
   let sb = null, channel = null, last = null, demo = false, cfg = null;
   const shown = new Set();
 
@@ -333,7 +332,6 @@ const BUCKET = "chat-media";
     const q = new URLSearchParams();
     if (room !== "lobby") q.set("room", room);
     if (cfg && !cfg.fixed) q.set("c", b64e(JSON.stringify({ u: cfg.u, k: cfg.k })));
-    if (roomPass) q.set("p", roomPass);
     const s = q.toString();
     return location.origin + location.pathname + (s ? "?" + s : "");
   }
@@ -698,7 +696,7 @@ const BUCKET = "chat-media";
     return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
   }
   // ----- 비밀번호 -----
-  let roomPass = window.__linkPass || store.get("tt_pass") || "";
+  let roomPass = store.get("tt_pass") || "";
   async function checkPass(c, p){
     try { const r = await window.supabase.createClient(c.u, c.k).rpc("check_pass", { p }); return r.error ? null : r.data === true; } catch { return null; }
   }
