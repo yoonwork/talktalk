@@ -242,7 +242,7 @@ create policy &quot;chat media read&quot; on storage.objects for select to anon,
 </div>
 <div class="overlay" id="sendPreview" hidden>
   <div class="card">
-    <h2 id="previewTitle" style="font-size:20px">이 사진을 보내시겠어요?</h2>
+    <h2 id="previewTitle" style="font-size:20px">사진을 보내시겠습니까?</h2>
     <div class="previewbox" id="previewBox"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="ghostbtn" type="button" id="previewCancel">취소</button>
@@ -591,7 +591,7 @@ const BUCKET = "chat-media";
     $("file").value = "";
     if (!pendingFiles.length) { showNotice("사진이나 동영상만 보낼 수 있어요."); return; }
     const what = pendingFiles[0].type.startsWith("video/") ? "동영상" : "사진";
-    $("previewTitle").textContent = `이 ${what}을 보내시겠어요?`;
+    $("previewTitle").textContent = `${what}을 보내시겠습니까?`;
     const box = $("previewBox"); box.replaceChildren();
     for (const f of pendingFiles) {
       const u = URL.createObjectURL(f); previewUrls.push(u);
