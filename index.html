@@ -275,6 +275,7 @@ const BUCKET = "chat-media";
   let ownerHash = null;
   const hashReady = (crypto.subtle ? crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret)) : Promise.reject())
     .then(buf => { ownerHash = [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join(""); }).catch(()=>{});
+  let maxId = 0;
   let pendingDel = null, pendingKick = null, isAdmin = false, kicked = false, adminIds = new Set();
   const adminTag = () => Object.assign(document.createElement("span"), { className:"admin", textContent:"방장" });
   async function loadAdminIds(){
@@ -362,6 +363,7 @@ const BUCKET = "chat-media";
 
   function append(m, stick){
     if (shown.has(m.id)) return; shown.add(m.id);
+    if (typeof m.id === "number" && m.id > maxId) maxId = m.id;
     $("loading")?.remove();
     const ts = new Date(m.created_at).getTime();
     if (!last || dayKey(last.ts) !== dayKey(ts)) {
@@ -518,6 +520,7 @@ const BUCKET = "chat-media";
       : await sb.rpc("admin_delete_message", { p_key: adminKey, p_id: id });
     if (error || data !== true) { btn.disabled = false; btn.classList.remove("confirm"); btn.textContent = "삭제"; showNotice("삭제하지 못했어요. 이 기기에서 보낸 메시지만 지울 수 있어요."); return; }
     markDeleted(id); showNotice("");
+    channel?.send({ type:"broadcast", event:"del", payload:{ id } });
   }
   $("viewer").onclick = () => { $("viewer").hidden = true; $("viewerImg").src = ""; };
 
@@ -540,6 +543,7 @@ const BUCKET = "chat-media";
     const { data, error } = await sb.from("messages").insert({ room, client_id: clientId, nick, owner_hash: ownerHash, ...row }).select().single();
     if (error) throw error;
     append(data, true);
+    channel?.send({ type:"broadcast", event:"msg", payload:{ id: data.id } });
   }
 
   $("form").addEventListener("submit", async e => {
@@ -645,6 +649,10 @@ const BUCKET = "chat-media";
     }
   }
 
+  async function sha256hex(t){
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+  }
   // ----- 비밀번호 -----
   let roomPass = store.get("tt_pass") || "";
   async function checkPass(c, p){
@@ -687,21 +695,41 @@ const BUCKET = "chat-media";
     data.reverse().forEach(m => append(m, false)); toBottom();
     updateSend();
 
-    channel = sb.channel("room:" + room, { config: { presence: { key: clientId } } })
-      .on("postgres_changes", { event:"INSERT", schema:"public", table:"messages", filter:`room=eq.${room}` }, p => {
-        const stick = nearBottom() || p.new.client_id === clientId; append(p.new, stick);
-        typers.delete(p.new.client_id); renderTyping();
-      })
-      .on("postgres_changes", { event:"DELETE", schema:"public", table:"messages" }, p => {
-        if (p.old && p.old.id != null) markDeleted(p.old.id);
+    // 비밀번호를 아는 사람만 아는 비밀 통로 이름
+    const topic = "room:" + room + ":" + (await sha256hex(roomPass + "|" + room)).slice(0, 32);
+    async function fetchNew(){
+      if (kicked) return;
+      const { data: rows } = await sb.from("messages").select("*").eq("room", room).gt("id", maxId).order("id", { ascending:true }).limit(100);
+      if (!rows) return;
+      const stick = nearBottom();
+      rows.forEach(m => { append(m, stick || m.client_id === clientId); typers.delete(m.client_id); });
+      if (rows.length) renderTyping();
+    }
+    async function stillExists(id){
+      const { data: r } = await sb.from("messages").select("id").eq("id", Number(id)).limit(1);
+      return !!(r && r.length);
+    }
+    setInterval(fetchNew, 15000);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") fetchNew(); });
+
+    channel = sb.channel(topic, { config: { presence: { key: clientId } } })
+      .on("broadcast", { event:"msg" }, () => fetchNew())
+      .on("broadcast", { event:"del" }, async ({ payload }) => {
+        if (payload && payload.id != null && !(await stillExists(payload.id))) markDeleted(payload.id);
       })
       .on("broadcast", { event:"typing" }, ({ payload }) => {
         if (!payload || payload.cid === clientId) return;
         typers.set(String(payload.cid), { nick: String(payload.nick||"누군가").slice(0,20), t: Date.now() }); renderTyping();
       })
-      .on("broadcast", { event:"cleared" }, () => clearList())
-      .on("broadcast", { event:"kick" }, ({ payload }) => {
-        if (payload && payload.cid === clientId) showKicked(); else renderPeople();
+      .on("broadcast", { event:"cleared" }, async () => {
+        const { data: r } = await sb.from("messages").select("id").eq("room", room).limit(1);
+        if (r && !r.length) clearList();
+      })
+      .on("broadcast", { event:"kick" }, async ({ payload }) => {
+        if (payload && payload.cid === clientId) {
+          const { data: b } = await sb.from("banned").select("client_id").eq("client_id", clientId).limit(1);
+          if (b && b.length) showKicked();
+        } else renderPeople();
       })
       .on("presence", { event:"sync" }, () => {
         const n = Object.keys(channel.presenceState()).length;
