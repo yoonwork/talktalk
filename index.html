@@ -4,33 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
-<title>톡톡방 주소가 바뀌었어요</title>
-<meta http-equiv="refresh" content="3; url=https://lololol-chat.github.io/">
+<title>사용할 수 없는 링크</title>
 <style>
-:root{--bg:#eef3f2;--panel:#fff;--ink:#15211f;--muted:#62716e;--accent:#0f6b5c;--on:#fff;color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1716;--panel:#162220;--ink:#e4eeec;--muted:#8fa29e;--accent:#4cc3ab;--on:#04130f;color-scheme:dark}}
+:root{--bg:#eef3f2;--panel:#fff;--ink:#15211f;--muted:#62716e;--accent:#0f6b5c;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1716;--panel:#162220;--ink:#e4eeec;--muted:#8fa29e;--accent:#4cc3ab;color-scheme:dark}}
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;padding:16px;box-sizing:border-box}
 .card{background:var(--panel);border-radius:18px;padding:28px 24px;max-width:360px;width:100%;text-align:center;display:flex;flex-direction:column;gap:12px}
 h1{margin:0;font-size:22px;color:var(--accent)}
 p{margin:0;color:var(--muted);line-height:1.6}
-a.btn{display:block;background:var(--accent);color:var(--on);text-decoration:none;font-weight:600;border-radius:12px;padding:12px 16px}
 </style>
 </head>
 <body>
 <div class="card">
-  <h1>톡톡방 주소가 바뀌었어요</h1>
-  <p>이 주소는 더 이상 쓰지 않아요.<br>새 주소로 바로 옮겨 드릴게요.</p>
-  <a class="btn" id="go" href="https://lololol-chat.github.io/">새 톡톡방으로 가기</a>
-  <p style="font-size:13px">lololol-chat.github.io</p>
+  <h1>사용할 수 없는 링크예요</h1>
+  <p>이 링크는 더 이상 쓰지 않아요.<br>새 링크는 방장에게 받아 주세요.</p>
 </div>
-<script>
-// 방 이름만 새 주소로 넘기고, 예전 링크에 붙어 있던 다른 값은 버려요
-(() => {
-  const room = (new URLSearchParams(location.search).get("room") || "").replace(/[^\w가-힣-]/g, "").slice(0, 40);
-  const url = "https://lololol-chat.github.io/" + (room ? "?room=" + encodeURIComponent(room) : "");
-  document.getElementById("go").href = url;
-  location.replace(url);
-})();
-</script>
 </body>
 </html>
