@@ -830,7 +830,9 @@ const BUCKET = "chat-media";
     return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
   }
   // ----- 비밀번호 -----
-  let roomPass = store.get("tt_pass") || "";
+  // 비밀번호는 기기에 기억하지 않아요: 들어올 때마다 입력 (예전에 저장된 것도 지움)
+  let roomPass = "";
+  if (store.get("tt_pass")) store.set("tt_pass", "");
   async function checkPass(c, p){
     try { const r = await window.supabase.createClient(c.u, c.k).rpc("check_pass", { p }); return r.error ? null : r.data === true; } catch { return null; }
   }
@@ -846,7 +848,7 @@ const BUCKET = "chat-media";
         const good = await checkPass(c, v);
         $("passBtn").disabled = false;
         if (good !== true) { $("passErr").textContent = "비밀번호가 맞지 않아요."; $("passErr").hidden = false; $("passInput").select(); return; }
-        roomPass = v; store.set("tt_pass", v); $("passModal").hidden = true; resolve(true);
+        roomPass = v; $("passModal").hidden = true; resolve(true);
       };
     });
   }
